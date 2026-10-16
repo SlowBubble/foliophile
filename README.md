@@ -1,3 +1,7 @@
+# m2a
+- Copy share URL encodes the transaction JSON in the URL hash.
+- Opening a shared URL loads its transactions without replacing local storage. Changes remain in memory until Save this locally replaces the stored history.
+
 # m1i
 - At the bottom of the page, provide an import button that reveals a JSON text area for transaction data (validated before replacing the current history) and a button to copy the existing transaction JSON to the clipboard.
 

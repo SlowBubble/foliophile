@@ -14,6 +14,9 @@ const showImportButton = document.querySelector("#show-import");
 const importTransactionsButton = document.querySelector("#import-transactions");
 const cancelImportButton = document.querySelector("#cancel-import");
 const copyTransactionsButton = document.querySelector("#copy-transactions");
+const copyShareUrlButton = document.querySelector("#copy-share-url");
+const saveLocallyButton = document.querySelector("#save-locally");
+const dataControlsDescription = document.querySelector("#data-controls-description");
 
 function today() {
   const date = new Date();
@@ -109,7 +112,9 @@ function validateTransactions(transactions) {
 }
 
 function persistTransactions(nextTransactions) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(nextTransactions));
+  if (!isSharedView) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(nextTransactions));
+  }
   transactions = nextTransactions;
   renderRealizedGains();
   renderAccountBalances();
@@ -143,18 +148,17 @@ function importTransactions() {
   }
 }
 
-async function copyTransactions() {
-  const json = JSON.stringify(transactions, null, 2);
+async function copyText(text, successMessage, failureLabel) {
   try {
     if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(json);
+      await navigator.clipboard.writeText(text);
     } else {
       throw new Error("Clipboard access is unavailable.");
     }
-    setStatus("Transaction JSON copied to the clipboard.");
+    setStatus(successMessage);
   } catch (error) {
     const fallback = document.createElement("textarea");
-    fallback.value = json;
+    fallback.value = text;
     fallback.setAttribute("readonly", "");
     fallback.style.position = "fixed";
     fallback.style.opacity = "0";
@@ -169,24 +173,89 @@ async function copyTransactions() {
       fallback.remove();
     }
     if (copied) {
-      setStatus("Transaction JSON copied to the clipboard.");
+      setStatus(successMessage);
     } else {
-      setStatus(`Could not copy transaction JSON: ${error.message}`);
+      setStatus(`${failureLabel}: ${error.message}`);
     }
   }
 }
 
-let transactions;
-try {
-  transactions = loadTransactions();
-} catch (error) {
-  transactions = [];
-  setStatus(
-    error instanceof SyntaxError
-      ? "Saved transaction data could not be read. Please check browser storage."
-      : `Could not load saved transactions: ${error.message}`,
+async function copyTransactions() {
+  await copyText(
+    JSON.stringify(transactions, null, 2),
+    "Transaction JSON copied to the clipboard.",
+    "Could not copy transaction JSON",
   );
 }
+
+async function copyShareUrl() {
+  const url = new URL(window.location.href);
+  url.hash = encodeURIComponent(JSON.stringify(transactions));
+  await copyText(
+    url.toString(),
+    "Share URL copied to the clipboard.",
+    "Could not copy share URL",
+  );
+}
+
+let isSharedView = false;
+let transactions;
+function loadLocalTransactions() {
+  try {
+    return loadTransactions();
+  } catch (error) {
+    setStatus(
+      error instanceof SyntaxError
+        ? "Saved transaction data could not be read. Please check browser storage."
+        : `Could not load saved transactions: ${error.message}`,
+    );
+    return [];
+  }
+}
+
+if (window.location.hash.length > 1) {
+  try {
+    const sharedJson = decodeURIComponent(window.location.hash.slice(1));
+    transactions = validateTransactions(JSON.parse(sharedJson));
+    isSharedView = true;
+    setStatus(
+      `Loaded ${transactions.length} transaction${transactions.length === 1 ? "" : "s"} from the shared URL. Not saved locally.`,
+    );
+  } catch (error) {
+    transactions = loadLocalTransactions();
+    setStatus(
+      error instanceof SyntaxError || error instanceof URIError
+        ? "The shared transaction data is not valid."
+        : `Could not load shared transactions: ${error.message}`,
+    );
+  }
+} else {
+  transactions = loadLocalTransactions();
+}
+
+function renderDataControls() {
+  showImportButton.hidden = isSharedView;
+  copyTransactionsButton.hidden = isSharedView;
+  saveLocallyButton.hidden = !isSharedView;
+  dataControlsDescription.textContent = isSharedView
+    ? "Shared transactions are not saved locally unless you choose to save them."
+    : "Importing replaces the current transaction history.";
+  importPanel.hidden = true;
+  showImportButton.setAttribute("aria-expanded", "false");
+}
+
+function saveSharedTransactionsLocally() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(transactions));
+    isSharedView = false;
+    renderDataControls();
+    setStatus("Shared transactions saved locally.");
+  } catch (error) {
+    setStatus(`Could not save transactions locally: ${error.message}`);
+  }
+}
+
+renderDataControls();
 
 function calculatePositions() {
   const positions = new Map();
@@ -958,6 +1027,8 @@ showImportButton.addEventListener("click", () => {
 importTransactionsButton.addEventListener("click", importTransactions);
 cancelImportButton.addEventListener("click", () => setImportPanelVisible(false));
 copyTransactionsButton.addEventListener("click", copyTransactions);
+copyShareUrlButton.addEventListener("click", copyShareUrl);
+saveLocallyButton.addEventListener("click", saveSharedTransactionsLocally);
 
 renderRealizedGains();
 renderAccountBalances();

@@ -259,7 +259,6 @@
           </tbody>
         </table>
       </div>
-      <p id="status" role="status" aria-live="polite"></p>
 
       <section class="history-section">
         <div class="history-header">
@@ -286,11 +285,12 @@
             </tbody>
           </table>
         </div>
+        <p id="status" role="status" aria-live="polite"></p>
       </section>
 
       <section class="data-controls" aria-labelledby="data-controls-heading">
         <h2 id="data-controls-heading">Import or copy data</h2>
-        <p>Importing replaces the current transaction history.</p>
+        <p id="data-controls-description">Importing replaces the current transaction history.</p>
         <div class="data-control-actions">
           <button
             id="show-import"
@@ -299,6 +299,8 @@
             aria-controls="import-panel"
           >Import JSON</button>
           <button id="copy-transactions" type="button">Copy existing JSON</button>
+          <button id="copy-share-url" type="button">Copy share URL</button>
+          <button id="save-locally" type="button" hidden>Save this locally</button>
         </div>
         <div id="import-panel" hidden>
           <label for="transaction-json">Transaction JSON</label>
