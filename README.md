@@ -1,3 +1,5 @@
+# m1i
+- At the bottom of the page, provide an import button that reveals a JSON text area for transaction data (validated before replacing the current history) and a button to copy the existing transaction JSON to the clipboard.
 
 # m1h
 - Start with $100,000 in cash and show the current cash balance below the Positions header.

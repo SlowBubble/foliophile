@@ -94,6 +94,34 @@
         font-size: 0.9rem;
       }
 
+      .data-controls {
+        margin-top: 32px;
+      }
+
+      .data-controls h2 {
+        margin: 0 0 12px;
+        font-size: 1.4rem;
+      }
+
+      .data-controls textarea {
+        box-sizing: border-box;
+        display: block;
+        width: 100%;
+        min-height: 140px;
+        margin-bottom: 12px;
+        padding: 10px;
+        border: 1px solid #dce4de;
+        border-radius: 6px;
+        font: inherit;
+        resize: vertical;
+      }
+
+      .data-control-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+
       .transaction-cell {
         cursor: text;
       }
@@ -257,6 +285,28 @@
               </tr>
             </tbody>
           </table>
+        </div>
+      </section>
+
+      <section class="data-controls" aria-labelledby="data-controls-heading">
+        <h2 id="data-controls-heading">Import or copy data</h2>
+        <p>Importing replaces the current transaction history.</p>
+        <div class="data-control-actions">
+          <button
+            id="show-import"
+            type="button"
+            aria-expanded="false"
+            aria-controls="import-panel"
+          >Import JSON</button>
+          <button id="copy-transactions" type="button">Copy existing JSON</button>
+        </div>
+        <div id="import-panel" hidden>
+          <label for="transaction-json">Transaction JSON</label>
+          <textarea id="transaction-json" spellcheck="false"></textarea>
+          <div class="data-control-actions">
+            <button id="import-transactions" type="button">Import transactions</button>
+            <button id="cancel-import" type="button">Cancel</button>
+          </div>
         </div>
       </section>
     </main>

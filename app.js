@@ -8,6 +8,12 @@ const transactionsBody = document.querySelector("#transactions");
 const status = document.querySelector("#status");
 const cashBalance = document.querySelector("#cash-balance");
 const netWorth = document.querySelector("#net-worth");
+const transactionJson = document.querySelector("#transaction-json");
+const importPanel = document.querySelector("#import-panel");
+const showImportButton = document.querySelector("#show-import");
+const importTransactionsButton = document.querySelector("#import-transactions");
+const cancelImportButton = document.querySelector("#cancel-import");
+const copyTransactionsButton = document.querySelector("#copy-transactions");
 
 function today() {
   const date = new Date();
@@ -113,6 +119,61 @@ function persistTransactions(nextTransactions) {
 
 function setStatus(message) {
   status.textContent = message || "";
+}
+
+function setImportPanelVisible(visible) {
+  importPanel.hidden = !visible;
+  showImportButton.setAttribute("aria-expanded", String(visible));
+  if (visible) transactionJson.focus();
+}
+
+function importTransactions() {
+  try {
+    const imported = JSON.parse(transactionJson.value);
+    validateTransactions(imported);
+    persistTransactions(imported);
+    setImportPanelVisible(false);
+    setStatus(`Imported ${imported.length} transaction${imported.length === 1 ? "" : "s"}.`);
+  } catch (error) {
+    setStatus(
+      error instanceof SyntaxError
+        ? "The transaction JSON is not valid JSON."
+        : `Could not import transactions: ${error.message}`,
+    );
+  }
+}
+
+async function copyTransactions() {
+  const json = JSON.stringify(transactions, null, 2);
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(json);
+    } else {
+      throw new Error("Clipboard access is unavailable.");
+    }
+    setStatus("Transaction JSON copied to the clipboard.");
+  } catch (error) {
+    const fallback = document.createElement("textarea");
+    fallback.value = json;
+    fallback.setAttribute("readonly", "");
+    fallback.style.position = "fixed";
+    fallback.style.opacity = "0";
+    document.body.append(fallback);
+    let copied = false;
+    try {
+      fallback.select();
+      copied = document.execCommand("copy");
+    } catch {
+      copied = false;
+    } finally {
+      fallback.remove();
+    }
+    if (copied) {
+      setStatus("Transaction JSON copied to the clipboard.");
+    } else {
+      setStatus(`Could not copy transaction JSON: ${error.message}`);
+    }
+  }
 }
 
 let transactions;
@@ -890,6 +951,13 @@ transactionsBody.addEventListener("dblclick", (event) => {
     startEditingCell(cell);
   }
 });
+
+showImportButton.addEventListener("click", () => {
+  setImportPanelVisible(importPanel.hidden);
+});
+importTransactionsButton.addEventListener("click", importTransactions);
+cancelImportButton.addEventListener("click", () => setImportPanelVisible(false));
+copyTransactionsButton.addEventListener("click", copyTransactions);
 
 renderRealizedGains();
 renderAccountBalances();
