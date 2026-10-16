@@ -23,10 +23,11 @@
         align-items: center;
         justify-content: space-between;
         gap: 24px;
-        margin-bottom: 32px;
+        margin: 32px 0 12px;
       }
 
-      h1 {
+      h1,
+      .history-header h2 {
         margin: 0;
         font-size: 2rem;
       }
@@ -69,10 +70,12 @@
         margin-top: 32px;
       }
 
+      .realized-gains-section {
+        margin-top: 0;
+      }
+
       .history-header h2 {
-        margin: 0;
         margin-bottom: 12px;
-        font-size: 1.25rem;
       }
 
       .delete-button {
@@ -175,14 +178,38 @@
     <script src="app.js" defer></script>
   </head>
   <body>
-    <header>
-      <div>
-        <h1>Positions</h1>
-        <p>Track your stock purchases and sales.</p>
-      </div>
-    </header>
-
     <main>
+      <section class="history-section realized-gains-section">
+        <div class="history-header">
+          <h2>Realized gains</h2>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Symbol</th>
+                <th scope="col">Duration held (years)</th>
+                <th scope="col">Gain</th>
+                <th scope="col">Gain %</th>
+                <th scope="col">IRR</th>
+              </tr>
+            </thead>
+            <tbody id="realized-gains">
+              <tr>
+                <td class="empty-state" colspan="5">No realized gains yet.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <header>
+        <div>
+          <h1>Positions</h1>
+          <p>Track your stock purchases and sales.</p>
+        </div>
+      </header>
+
       <div class="table-wrap">
         <table>
           <thead>

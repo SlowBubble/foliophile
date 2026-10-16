@@ -1,4 +1,10 @@
 
+# m1g
+- Add another table before the Positions table, which shows the realized gains for each stock, counting only shares that had been bought and sold
+  - Show the duration held (using last sold) in years
+  - Show amount of gain, % of gain and IRR.
+  - Use average-cost basis, matching the Positions calculation; duration runs from the first purchase to the latest sale. Show gain metrics as not recorded when sale proceeds are missing.
+
 # m1f
 - Double-click the **sell** type cell in the draft row to cancel sale mode and return to a purchase.
 # m1e

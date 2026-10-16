@@ -1,6 +1,7 @@
 "use strict";
 
 const STORAGE_KEY = "foliophilia.transactions";
+const realizedGainsBody = document.querySelector("#realized-gains");
 const positionsBody = document.querySelector("#positions");
 const transactionsBody = document.querySelector("#transactions");
 const status = document.querySelector("#status");
@@ -101,6 +102,7 @@ function validateTransactions(transactions) {
 function persistTransactions(nextTransactions) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(nextTransactions));
   transactions = nextTransactions;
+  renderRealizedGains();
   renderPositions();
   renderTransactions();
 }
@@ -150,11 +152,146 @@ function calculatePositions() {
     .sort((left, right) => left.symbol.localeCompare(right.symbol));
 }
 
+function dateTimestamp(value) {
+  const [, month, day, year] = /^(\d{2})-(\d{2})-(\d{4})$/.exec(value);
+  return Date.UTC(Number(year), Number(month) - 1, Number(day));
+}
+
+function calculateRealizedGains() {
+  const results = new Map();
+
+  for (const transaction of transactions) {
+    let result = results.get(transaction.symbol);
+    if (!result) {
+      result = {
+        symbol: transaction.symbol,
+        shares: 0,
+        costBasis: 0,
+        realizedCostBasis: 0,
+        proceeds: 0,
+        hasSales: false,
+        hasUnrecordedProceeds: false,
+        firstPurchaseDate: null,
+        lastSaleDate: null,
+      };
+      results.set(transaction.symbol, result);
+    }
+
+    const timestamp = dateTimestamp(transaction.date);
+    if (transaction.type === "buy") {
+      result.shares += transaction.shares;
+      result.costBasis += transaction.shares * transaction.price;
+      if (
+        result.firstPurchaseDate === null ||
+        timestamp < result.firstPurchaseDate
+      ) {
+        result.firstPurchaseDate = timestamp;
+      }
+      continue;
+    }
+
+    const averageCost = result.costBasis / result.shares;
+    const soldCostBasis = averageCost * transaction.shares;
+    result.shares -= transaction.shares;
+    result.costBasis -= soldCostBasis;
+    result.realizedCostBasis += soldCostBasis;
+    result.hasSales = true;
+    result.lastSaleDate =
+      result.lastSaleDate === null
+        ? timestamp
+        : Math.max(result.lastSaleDate, timestamp);
+
+    const saleProceeds =
+      transaction.amount ?? transaction.price * transaction.shares;
+    if (Number.isFinite(saleProceeds) && saleProceeds > 0) {
+      result.proceeds += saleProceeds;
+    } else {
+      result.hasUnrecordedProceeds = true;
+    }
+  }
+
+  return [...results.values()]
+    .filter((result) => result.hasSales)
+    .map((result) => {
+      const elapsed =
+        result.firstPurchaseDate === null || result.lastSaleDate === null
+          ? 0
+          : result.lastSaleDate - result.firstPurchaseDate;
+      const durationYears =
+        elapsed > 0 ? elapsed / (365.2425 * 24 * 60 * 60 * 1000) : null;
+      const gain = result.proceeds - result.realizedCostBasis;
+      const gainRate = gain / result.realizedCostBasis;
+      const irr =
+        !result.hasUnrecordedProceeds &&
+        durationYears !== null &&
+        result.realizedCostBasis > 0
+          ? (result.proceeds / result.realizedCostBasis) ** (1 / durationYears) -
+            1
+          : null;
+
+      return {
+        symbol: result.symbol,
+        durationYears,
+        gain: result.hasUnrecordedProceeds ? null : gain,
+        gainRate: result.hasUnrecordedProceeds ? null : gainRate,
+        irr,
+      };
+    })
+    .sort((left, right) => left.symbol.localeCompare(right.symbol));
+}
+
 function formatCurrency(value) {
   return new Intl.NumberFormat(undefined, {
     style: "currency",
     currency: "USD",
   }).format(value);
+}
+
+function formatPercentage(value) {
+  return new Intl.NumberFormat(undefined, {
+    style: "percent",
+    maximumFractionDigits: 2,
+  }).format(value);
+}
+
+function renderRealizedGains() {
+  if (!realizedGainsBody) return;
+
+  const gains = calculateRealizedGains();
+  realizedGainsBody.replaceChildren();
+
+  if (gains.length === 0) {
+    const row = document.createElement("tr");
+    const cell = document.createElement("td");
+    cell.colSpan = 5;
+    cell.className = "empty-state";
+    cell.textContent = "No realized gains yet.";
+    row.append(cell);
+    realizedGainsBody.append(row);
+    return;
+  }
+
+  for (const gain of gains) {
+    const row = document.createElement("tr");
+    const values = [
+      gain.symbol,
+      gain.durationYears === null
+        ? "Not recorded"
+        : new Intl.NumberFormat(undefined, {
+            maximumFractionDigits: 2,
+          }).format(gain.durationYears),
+      gain.gain === null ? "Not recorded" : formatCurrency(gain.gain),
+      gain.gainRate === null ? "Not recorded" : formatPercentage(gain.gainRate),
+      gain.irr === null ? "Not recorded" : formatPercentage(gain.irr),
+    ];
+
+    for (const value of values) {
+      const cell = document.createElement("td");
+      cell.textContent = value;
+      row.append(cell);
+    }
+    realizedGainsBody.append(row);
+  }
 }
 
 function renderPositions() {
@@ -664,5 +801,6 @@ transactionsBody.addEventListener("dblclick", (event) => {
   }
 });
 
+renderRealizedGains();
 renderPositions();
 renderTransactions();
