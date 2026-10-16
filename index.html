@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Foliophilia — Positions</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        color: #20332b;
+        background: #f5f7f4;
+      }
+
+      body {
+        max-width: 960px;
+        margin: 0 auto;
+        padding: 48px 24px;
+      }
+
+      header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 24px;
+        margin-bottom: 32px;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 2rem;
+      }
+
+      p {
+        color: #617168;
+      }
+
+      button {
+        border: 0;
+        border-radius: 6px;
+        padding: 10px 16px;
+        color: white;
+        background: #26704c;
+        font: inherit;
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      button:hover {
+        background: #1d593b;
+      }
+
+      button:focus-visible {
+        outline: 3px solid #84bd9e;
+        outline-offset: 2px;
+      }
+
+      .sell-button {
+        padding: 7px 12px;
+        color: #26704c;
+        background: #e7f1e9;
+      }
+
+      .sell-button:hover {
+        color: white;
+      }
+
+      .history-section {
+        margin-top: 32px;
+      }
+
+      .history-header h2 {
+        margin: 0;
+        margin-bottom: 12px;
+        font-size: 1.25rem;
+      }
+
+      .delete-button {
+        padding: 4px 9px;
+        color: #9a342d;
+        background: #f8e9e7;
+      }
+
+      .delete-button:hover {
+        color: white;
+        background: #9a342d;
+      }
+
+      .history-hint {
+        margin: 0;
+        font-size: 0.9rem;
+      }
+
+      .transaction-cell {
+        cursor: text;
+      }
+
+      .transaction-cell:hover {
+        background: #f5f7f4;
+      }
+
+      .transaction-cell input {
+        box-sizing: border-box;
+        width: 100%;
+        min-width: 100px;
+        padding: 6px;
+        border: 1px solid #84bd9e;
+        border-radius: 4px;
+        font: inherit;
+      }
+
+      .table-wrap {
+        overflow-x: auto;
+        border: 1px solid #dce4de;
+        border-radius: 8px;
+        background: white;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        text-align: left;
+      }
+
+      th,
+      td {
+        padding: 14px 16px;
+        border-bottom: 1px solid #e8ede9;
+        white-space: nowrap;
+      }
+
+      th {
+        color: #617168;
+        font-size: 0.8rem;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
+      tbody tr:last-child td {
+        border-bottom: 0;
+      }
+
+      .empty-state {
+        padding: 28px 16px;
+        color: #617168;
+        text-align: center;
+      }
+
+      #status {
+        min-height: 1.5em;
+        margin-top: 16px;
+        color: #9a342d;
+      }
+
+      @media (max-width: 560px) {
+        body {
+          padding: 28px 16px;
+        }
+
+        header {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+      }
+    </style>
+    <script src="app.js" defer></script>
+  </head>
+  <body>
+    <header>
+      <div>
+        <h1>Positions</h1>
+        <p>Track your stock purchases and sales.</p>
+      </div>
+      <form id="buy-form">
+        <button type="submit">Enter transaction</button>
+      </form>
+    </header>
+
+    <main>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Symbol</th>
+              <th scope="col">Shares</th>
+              <th scope="col">Cost basis</th>
+              <th scope="col">Average cost</th>
+              <th scope="col">Action</th>
+            </tr>
+          </thead>
+          <tbody id="positions">
+            <tr>
+              <td class="empty-state" colspan="5">Loading positions…</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p id="status" role="status" aria-live="polite"></p>
+
+      <section class="history-section">
+        <div class="history-header">
+          <h2>Transaction history</h2>
+        </div>
+        <p class="history-hint">Double-click a cell to edit it. Press Enter to save or Escape to cancel.</p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Type</th>
+                <th scope="col">Symbol</th>
+                <th scope="col">Shares</th>
+                <th scope="col">Price</th>
+                <th scope="col">Amount</th>
+                <th scope="col">Date</th>
+                <th scope="col">Action</th>
+              </tr>
+            </thead>
+            <tbody id="transactions">
+              <tr>
+                <td class="empty-state" colspan="7">No transactions yet.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>
