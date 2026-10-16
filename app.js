@@ -4,7 +4,6 @@ const STORAGE_KEY = "foliophilia.transactions";
 const positionsBody = document.querySelector("#positions");
 const transactionsBody = document.querySelector("#transactions");
 const status = document.querySelector("#status");
-const buyForm = document.querySelector("#buy-form");
 
 function today() {
   const date = new Date();
@@ -99,25 +98,34 @@ function validateTransactions(transactions) {
   return transactions;
 }
 
+function persistTransactions(nextTransactions) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(nextTransactions));
+  transactions = nextTransactions;
+  renderPositions();
+  renderTransactions();
+}
+
+function setStatus(message) {
+  status.textContent = message || "";
+}
+
 let transactions;
 try {
   transactions = loadTransactions();
 } catch (error) {
   transactions = [];
-  status.textContent =
+  setStatus(
     error instanceof SyntaxError
       ? "Saved transaction data could not be read. Please check browser storage."
-      : `Could not load saved transactions: ${error.message}`;
-  buyForm.querySelector("button").disabled = true;
+      : `Could not load saved transactions: ${error.message}`,
+  );
 }
 
 function appendTransaction(transaction) {
   const nextTransactions = [...transactions, transaction];
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(nextTransactions));
-  transactions = nextTransactions;
-  status.textContent = "";
-  renderPositions();
-  renderTransactions();
+  validateTransactions(nextTransactions);
+  persistTransactions(nextTransactions);
+  setStatus("");
 }
 
 function calculatePositions() {
@@ -157,6 +165,8 @@ function formatCurrency(value) {
 }
 
 function renderPositions() {
+  if (!positionsBody) return;
+
   const positions = calculatePositions();
   positionsBody.replaceChildren();
 
@@ -201,34 +211,326 @@ function renderPositions() {
   }
 }
 
+function parseNumericField(value) {
+  if (value === "" || value === null || value === undefined) {
+    return undefined;
+  }
+
+  const trimmed = String(value).trim();
+  if (!trimmed) return undefined;
+
+  const parsed = Number(trimmed.replace(/[$,]/g, ""));
+  return Number.isFinite(parsed) ? parsed : NaN;
+}
+
+function normalizeTransaction(input) {
+  const next = { ...input };
+  if (typeof next.symbol === "string") {
+    next.symbol = next.symbol.trim().toUpperCase();
+  }
+  if (typeof next.type === "string") {
+    next.type = next.type.trim().toLowerCase();
+  }
+
+  if (Object.prototype.hasOwnProperty.call(next, "shares")) {
+    next.shares = parseNumericField(next.shares);
+  }
+  if (Object.prototype.hasOwnProperty.call(next, "price")) {
+    next.price = parseNumericField(next.price);
+    if (next.price === undefined) delete next.price;
+  }
+  if (Object.prototype.hasOwnProperty.call(next, "amount")) {
+    next.amount = parseNumericField(next.amount);
+    if (next.amount === undefined) delete next.amount;
+  }
+  return next;
+}
+
+function updateComputedShares(row) {
+  const priceInput = row.querySelector('input[data-field="price"]');
+  const amountInput = row.querySelector('input[data-field="amount"]');
+  const sharesCell = row.querySelector('[data-field="shares"][data-computed="true"]');
+
+  if (!priceInput || !amountInput || !sharesCell) return;
+
+  const price = parseNumericField(priceInput.value);
+  const amount = parseNumericField(amountInput.value);
+
+  if (!Number.isFinite(price) || price <= 0 || !Number.isFinite(amount) || amount <= 0) {
+    sharesCell.textContent = "0";
+    return;
+  }
+
+  const shares = Math.floor(amount / price);
+  sharesCell.textContent = String(shares);
+}
+
+function buildNewPurchaseRow() {
+  const row = document.createElement("tr");
+  row.className = "new-transaction-row";
+
+  const fields = [
+    { key: "type", value: "buy", readOnly: true },
+    { key: "symbol", value: "" },
+    { key: "price", value: "" },
+    { key: "amount", value: "" },
+    { key: "date", value: today(), placeholder: today() },
+  ];
+
+  for (const field of fields) {
+    const cell = document.createElement("td");
+    if (field.key === "type") {
+      cell.textContent = field.value;
+      cell.dataset.field = field.key;
+      row.append(cell);
+      continue;
+    }
+
+    const input = document.createElement("input");
+    input.type = "text";
+    input.name = field.key;
+    input.value = field.value;
+    if (field.placeholder) {
+      input.placeholder = field.placeholder;
+    }
+    input.dataset.field = field.key;
+    input.setAttribute("aria-label", field.key);
+    cell.append(input);
+    row.append(cell);
+  }
+
+  const sharesCell = document.createElement("td");
+  sharesCell.dataset.field = "shares";
+  sharesCell.dataset.computed = "true";
+  sharesCell.textContent = "0";
+  row.insertBefore(sharesCell, row.children[2]);
+
+  const actionCell = document.createElement("td");
+  const saveButton = document.createElement("button");
+  saveButton.type = "button";
+  saveButton.className = "save-button";
+  saveButton.textContent = "Save";
+  actionCell.append(saveButton);
+  row.append(actionCell);
+
+  updateComputedShares(row);
+  row.querySelector('input[data-field="price"]').addEventListener("input", () => updateComputedShares(row));
+  row.querySelector('input[data-field="amount"]').addEventListener("input", () => updateComputedShares(row));
+  return row;
+}
+
+function captureNewPurchase(row) {
+  const inputs = row.querySelectorAll("input");
+  const candidate = {};
+  candidate.type = "buy";
+  for (const input of inputs) {
+    const value = input.value.trim();
+    candidate[input.dataset.field] = value;
+  }
+
+  const normalized = normalizeTransaction(candidate);
+  if (normalized.symbol === undefined || normalized.symbol === "") {
+    throw new Error("The stock symbol is required.");
+  }
+  if (normalized.price === undefined || !Number.isFinite(normalized.price) || normalized.price <= 0) {
+    throw new Error("Price must be a positive number.");
+  }
+  if (normalized.amount === undefined || !Number.isFinite(normalized.amount) || normalized.amount <= 0) {
+    throw new Error("Amount must be a positive number.");
+  }
+  normalized.shares = Math.floor(normalized.amount / normalized.price);
+  if (!Number.isInteger(normalized.shares) || normalized.shares <= 0) {
+    throw new Error("The investment amount is not enough to buy one share.");
+  }
+  if (!parseDate(normalized.date)) {
+    throw new Error("Date must be in MM-DD-YYYY format.");
+  }
+
+  return normalized;
+}
+
+function saveNewPurchase(row) {
+  try {
+    const purchase = captureNewPurchase(row);
+    const nextTransactions = [...transactions, purchase];
+    validateTransactions(nextTransactions);
+    persistTransactions(nextTransactions);
+    setStatus("");
+  } catch (error) {
+    setStatus(error.message);
+  }
+}
+
+function cloneWithFieldValue(index, field, value) {
+  const nextTransactions = transactions.map((transaction, transactionIndex) => {
+    if (transactionIndex !== index) return transaction;
+
+    const next = { ...transaction };
+    if (value === "") {
+      if (field === "symbol") {
+        next.symbol = "";
+      } else if (field === "type") {
+        next.type = "buy";
+      } else if (field === "date") {
+        next.date = today();
+      } else if (["price", "amount"].includes(field)) {
+        delete next[field];
+      } else {
+        next[field] = undefined;
+      }
+      return next;
+    }
+
+    if (field === "type") {
+      next.type = String(value).trim().toLowerCase();
+    } else if (field === "symbol") {
+      next.symbol = String(value).trim().toUpperCase();
+    } else if (field === "date") {
+      next.date = String(value).trim();
+    } else if (field === "shares") {
+      next.shares = Number(String(value).trim());
+    } else {
+      const numeric = parseNumericField(value);
+      if (numeric === undefined) {
+        delete next[field];
+      } else {
+        next[field] = numeric;
+      }
+    }
+
+    return next;
+  });
+
+  return nextTransactions;
+}
+
+function updateTransactionField(index, field, rawValue) {
+  const nextTransactions = cloneWithFieldValue(index, field, rawValue);
+  try {
+    validateTransactions(nextTransactions);
+    persistTransactions(nextTransactions);
+    setStatus("");
+  } catch (error) {
+    setStatus(error.message);
+    renderTransactions();
+  }
+}
+
+function deleteTransaction(index) {
+  const nextTransactions = transactions.filter((_, transactionIndex) => transactionIndex !== index);
+  try {
+    validateTransactions(nextTransactions);
+    persistTransactions(nextTransactions);
+    setStatus("");
+  } catch (error) {
+    setStatus(error.message);
+  }
+}
+
+function startEditingCell(cell) {
+  const index = Number(cell.dataset.index);
+  const field = cell.dataset.field;
+  if (!Number.isInteger(index) || !field || field === "shares") return;
+
+  const transaction = transactions[index];
+  if (!transaction) return;
+
+  const currentValue = transaction[field] === undefined ? "" : String(transaction[field]);
+  const input = document.createElement("input");
+  input.type = "text";
+  input.value = currentValue;
+  input.dataset.index = String(index);
+  input.dataset.field = field;
+  input.setAttribute("aria-label", `Edit ${field}`);
+
+  const save = () => {
+    const nextValue = input.value;
+    if (field === "type") {
+      const normalized = String(nextValue).trim().toLowerCase();
+      if (!/^(buy|sell)$/.test(normalized)) {
+        setStatus("Type must be buy or sell.");
+        renderTransactions();
+        return;
+      }
+    }
+
+    if (field === "symbol") {
+      const symbol = String(nextValue).trim().toUpperCase();
+      if (!/^[A-Z0-9.^-]{1,15}$/.test(symbol)) {
+        setStatus("Stock symbol is invalid.");
+        renderTransactions();
+        return;
+      }
+    }
+
+    if (field === "shares") {
+      const numeric = Number(String(nextValue).trim());
+      if (!Number.isFinite(numeric) || !Number.isInteger(numeric) || numeric <= 0) {
+        setStatus("Shares must be a positive whole number.");
+        renderTransactions();
+        return;
+      }
+    }
+
+    if (["price", "amount"].includes(field)) {
+      const numeric = parseNumericField(nextValue);
+      if (nextValue === "" && field !== "amount") {
+        updateTransactionField(index, field, "");
+        return;
+      }
+      if (!Number.isFinite(numeric) || numeric <= 0) {
+        setStatus("Price and amount must be positive numbers.");
+        renderTransactions();
+        return;
+      }
+    }
+
+    if (field === "date") {
+      if (!parseDate(String(nextValue).trim())) {
+        setStatus("Date must be in MM-DD-YYYY format.");
+        renderTransactions();
+        return;
+      }
+    }
+
+    updateTransactionField(index, field, nextValue);
+  };
+
+  input.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      renderTransactions();
+    }
+  });
+
+  input.addEventListener("blur", () => {
+    save();
+  }, { once: true });
+
+  cell.replaceChildren(input);
+  input.focus();
+  input.select();
+}
+
 function renderTransactions() {
   if (!transactionsBody) return;
 
   transactionsBody.replaceChildren();
-  if (transactions.length === 0) {
-    const row = document.createElement("tr");
-    const cell = document.createElement("td");
-    cell.colSpan = 7;
-    cell.className = "empty-state";
-    cell.textContent = "No transactions yet.";
-    row.append(cell);
-    transactionsBody.append(row);
-    return;
-  }
 
-  const fields = ["type", "symbol", "shares", "price", "amount", "date"];
-  for (const [index, transaction] of transactions.entries()) {
+  const rows = transactions.map((transaction, index) => {
     const row = document.createElement("tr");
+    const fields = ["type", "symbol", "shares", "price", "amount", "date"];
+
     for (const field of fields) {
       const cell = document.createElement("td");
-      cell.className = "transaction-cell";
       cell.dataset.index = String(index);
       cell.dataset.field = field;
       cell.textContent =
-        transaction[field] === undefined
-          ? "Not recorded"
-          : String(transaction[field]);
-      cell.title = "Double-click to edit";
+        transaction[field] === undefined ? "Not recorded" : String(transaction[field]);
+      if (field !== "shares") {
+        cell.className = "transaction-cell";
+        cell.title = "Double-click to edit";
+      }
       row.append(cell);
     }
 
@@ -244,216 +546,40 @@ function renderTransactions() {
     );
     actionCell.append(deleteButton);
     row.append(actionCell);
+    return row;
+  });
+
+  for (const row of rows) {
     transactionsBody.append(row);
   }
+
+  const addRow = buildNewPurchaseRow();
+  transactionsBody.append(addRow);
 }
 
-function deleteTransaction(index) {
-  const nextTransactions = transactions.filter(
-    (_transaction, transactionIndex) => transactionIndex !== index,
-  );
-  validateTransactions(nextTransactions);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(nextTransactions));
-  transactions = nextTransactions;
-  status.textContent = "";
-  renderPositions();
-  renderTransactions();
-}
-
-function saveTransactionEdit(index, field, rawValue) {
-  const value =
-    field === "type" || field === "symbol" || field === "date"
-      ? rawValue.trim()
-      : Number(rawValue);
-  const transaction = { ...transactions[index] };
-  transaction[field] = field === "symbol" ? value.toUpperCase() : value;
-  const nextTransactions = transactions.map((entry, entryIndex) =>
-    entryIndex === index ? transaction : entry,
-  );
-
-  validateTransactions(nextTransactions);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(nextTransactions));
-  transactions = nextTransactions;
-  status.textContent = "";
-  renderPositions();
-  renderTransactions();
-}
-
-function editTransactionCell(cell) {
-  if (!cell || cell.querySelector("input")) return;
-
-  const index = Number(cell.dataset.index);
-  const field = cell.dataset.field;
-  if (!Number.isInteger(index) || !transactions[index] || !field) return;
-
-  const originalValue = transactions[index][field];
-  const input = document.createElement("input");
-  input.type = "text";
-  input.value = String(originalValue);
-  input.setAttribute("aria-label", `Edit transaction ${field}`);
-  if (field === "shares" || field === "price" || field === "amount") {
-    input.inputMode = "decimal";
-  }
-
-  let finished = false;
-  const finish = (save) => {
-    if (finished) return;
-    finished = true;
-
-    if (!save) {
-      renderTransactions();
-      return;
+transactionsBody.addEventListener("click", (event) => {
+  const saveButton = event.target.closest(".save-button");
+  if (saveButton) {
+    const row = saveButton.closest("tr");
+    if (row) {
+      saveNewPurchase(row);
     }
+    return;
+  }
 
-    try {
-      saveTransactionEdit(index, field, input.value);
-    } catch (error) {
-      status.textContent = `Could not update transaction: ${error.message}`;
-      renderTransactions();
+  const deleteButton = event.target.closest(".delete-button");
+  if (deleteButton) {
+    const index = Number(deleteButton.dataset.index);
+    if (Number.isInteger(index)) {
+      deleteTransaction(index);
     }
-  };
-
-  input.addEventListener("keydown", (event) => {
-    if (event.key === "Enter") {
-      event.preventDefault();
-      finish(true);
-    } else if (event.key === "Escape") {
-      event.preventDefault();
-      finish(false);
-    }
-  });
-  input.addEventListener("blur", () => finish(true));
-  cell.replaceChildren(input);
-  input.focus();
-  input.select();
-}
-
-function promptForDate() {
-  const value = window.prompt(
-    "Enter the transaction date (MM-DD-YYYY):",
-    today(),
-  );
-  if (value === null) return null;
-
-  const date = parseDate(value.trim());
-  if (!date) {
-    status.textContent = "Enter a valid date in MM-DD-YYYY format.";
-    return null;
-  }
-  return date;
-}
-
-buyForm.addEventListener("submit", (event) => {
-  event.preventDefault();
-  status.textContent = "";
-
-  const rawSymbol = window.prompt("Enter the stock symbol:");
-  if (rawSymbol === null) return;
-  const symbol = rawSymbol.trim().toUpperCase();
-  if (!/^[A-Z0-9.^-]{1,15}$/.test(symbol)) {
-    status.textContent = "Enter a valid stock symbol.";
-    return;
-  }
-
-  const priceInput = window.prompt("Enter the stock price:");
-  if (priceInput === null) return;
-  const price = Number(priceInput);
-  if (!Number.isFinite(price) || price <= 0) {
-    status.textContent = "The stock price must be greater than zero.";
-    return;
-  }
-
-  const amountInput = window.prompt("Enter the amount you want to invest:");
-  if (amountInput === null) return;
-  const amount = Number(amountInput);
-  if (!Number.isFinite(amount) || amount <= 0) {
-    status.textContent = "The investment amount must be greater than zero.";
-    return;
-  }
-
-  const shares = Math.floor(amount / price);
-  if (shares < 1) {
-    status.textContent = "The investment amount is not enough to buy one share.";
-    return;
-  }
-
-  const date = promptForDate();
-  if (!date) return;
-
-  try {
-    appendTransaction({ type: "buy", symbol, amount, price, shares, date });
-  } catch (error) {
-    status.textContent = `Could not save the purchase: ${error.message}`;
-  }
-});
-
-positionsBody.addEventListener("click", (event) => {
-  const button = event.target.closest("button[data-symbol]");
-  if (!button) return;
-  status.textContent = "";
-
-  const symbol = button.dataset.symbol;
-  const position = calculatePositions().find((item) => item.symbol === symbol);
-  if (!position) return;
-
-  const priceInput = window.prompt(`Enter the sale price per ${symbol} share:`);
-  if (priceInput === null) return;
-  const price = Number(priceInput);
-  if (!Number.isFinite(price) || price <= 0) {
-    status.textContent = "The stock price must be greater than zero.";
-    return;
-  }
-
-  const sharesInput = window.prompt(
-    `How many ${symbol} shares do you want to sell? (You own ${position.shares})`,
-  );
-  if (sharesInput === null) return;
-  const shares = Number(sharesInput);
-  if (
-    !Number.isFinite(shares) ||
-    shares <= 0 ||
-    shares > position.shares
-  ) {
-    status.textContent = `Enter a number greater than zero and no more than ${position.shares}.`;
-    return;
-  }
-
-  const amount = shares * price;
-  if (!Number.isFinite(amount)) {
-    status.textContent = "The sale proceeds are too large to record.";
-    return;
-  }
-
-  const date = promptForDate();
-  if (!date) return;
-
-  try {
-    appendTransaction({
-      type: "sell",
-      symbol,
-      shares,
-      price,
-      amount,
-      date,
-    });
-  } catch (error) {
-    status.textContent = `Could not save the sale: ${error.message}`;
   }
 });
 
 transactionsBody.addEventListener("dblclick", (event) => {
-  const cell = event.target.closest("td[data-index][data-field]");
-  if (cell) editTransactionCell(cell);
-});
-
-transactionsBody.addEventListener("click", (event) => {
-  const button = event.target.closest("button[data-index]");
-  if (!button) return;
-
-  try {
-    deleteTransaction(Number(button.dataset.index));
-  } catch (error) {
-    status.textContent = `Could not delete transaction: ${error.message}`;
+  const cell = event.target.closest(".transaction-cell");
+  if (cell) {
+    startEditingCell(cell);
   }
 });
 

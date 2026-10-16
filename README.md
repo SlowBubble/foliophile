@@ -1,4 +1,7 @@
 
+# m1d
+- Instead of "Enter ..." button, let just add a row to the bottom of the transactions table with type buy, and action being "Save"
+
 # m1c
 - let's ask for price before number shares for both buy and sell
 
@@ -9,7 +12,7 @@ Have a button that when clicked:
 - Display a transaction table of all the transactions
   - Allow editing each individual field in the transaction when I double click on that cell and update the corresponding data in local storage
 
-The complete transaction history is displayed below the positions table. Double-click a type, symbol, shares, price, amount, or date cell to edit it; press Enter to save or Escape to cancel. Edits and deletions are validated against the whole transaction history before they are saved, and positions are recalculated after a successful change. Use the **×** button to delete a transaction. A purchase cannot be deleted if a later sale depends on its shares.
+The complete transaction history is displayed below the positions table. Shares are computed for purchases and cannot be edited; double-click a type, symbol, price, amount, or date cell to edit it. Click outside the field to save or press Escape to cancel. Edits and deletions are validated against the whole transaction history before they are saved, and positions are recalculated after a successful change. Use the **×** button to delete a transaction. A purchase cannot be deleted if a later sale depends on its shares.
 
 Sales recorded by an earlier version before sale prices were collected remain in the ledger and continue to count toward positions. Their missing price or amount fields display as **Not recorded** and can be filled in by editing those cells.
 
