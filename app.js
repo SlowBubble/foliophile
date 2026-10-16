@@ -121,13 +121,6 @@ try {
   );
 }
 
-function appendTransaction(transaction) {
-  const nextTransactions = [...transactions, transaction];
-  validateTransactions(nextTransactions);
-  persistTransactions(nextTransactions);
-  setStatus("");
-}
-
 function calculatePositions() {
   const positions = new Map();
 
@@ -246,64 +239,80 @@ function normalizeTransaction(input) {
   return next;
 }
 
-function updateComputedShares(row) {
-  const priceInput = row.querySelector('input[data-field="price"]');
+function updateDraftCalculations(row) {
+  const type = row.dataset.type;
+  const price = parseNumericField(row.querySelector('input[data-field="price"]')?.value);
+  const sharesInput = row.querySelector('input[data-field="shares"]');
   const amountInput = row.querySelector('input[data-field="amount"]');
   const sharesCell = row.querySelector('[data-field="shares"][data-computed="true"]');
+  const amountCell = row.querySelector('[data-field="amount"][data-computed="true"]');
 
-  if (!priceInput || !amountInput || !sharesCell) return;
-
-  const price = parseNumericField(priceInput.value);
-  const amount = parseNumericField(amountInput.value);
-
-  if (!Number.isFinite(price) || price <= 0 || !Number.isFinite(amount) || amount <= 0) {
-    sharesCell.textContent = "0";
-    return;
+  if (type === "buy" && sharesCell) {
+    const amount = parseNumericField(amountInput?.value);
+    sharesCell.textContent =
+      Number.isFinite(price) && price > 0 && Number.isFinite(amount) && amount > 0
+        ? String(Math.floor(amount / price))
+        : "0";
+  } else if (type === "sell" && amountCell) {
+    const shares = parseNumericField(sharesInput?.value);
+    amountCell.textContent =
+      Number.isFinite(price) && price > 0 && Number.isFinite(shares) && shares > 0
+        ? String(shares * price)
+        : "0";
   }
-
-  const shares = Math.floor(amount / price);
-  sharesCell.textContent = String(shares);
 }
 
-function buildNewPurchaseRow() {
+function buildNewTransactionRow(type = "buy", symbol = "") {
   const row = document.createElement("tr");
   row.className = "new-transaction-row";
+  row.dataset.type = type;
+  const latestPurchase =
+    type === "sell"
+      ? [...transactions]
+          .reverse()
+          .find(
+            (transaction) =>
+              transaction.type === "buy" && transaction.symbol === symbol,
+          )
+      : undefined;
 
-  const fields = [
-    { key: "type", value: "buy", readOnly: true },
-    { key: "symbol", value: "" },
-    { key: "price", value: "" },
-    { key: "amount", value: "" },
-    { key: "date", value: today(), placeholder: today() },
-  ];
-
-  for (const field of fields) {
+  const fields = ["type", "symbol", "price", "shares", "amount", "date"];
+  for (const key of fields) {
     const cell = document.createElement("td");
-    if (field.key === "type") {
-      cell.textContent = field.value;
-      cell.dataset.field = field.key;
+    cell.dataset.field = key;
+    if (key === "type") {
+      cell.textContent = type;
       row.append(cell);
       continue;
     }
 
+    const computed = (type === "buy" && key === "shares") ||
+      (type === "sell" && key === "amount");
+    if (computed) {
+      cell.dataset.computed = "true";
+      cell.textContent = "0";
+      row.append(cell);
+      continue;
+    }
+    if (type === "buy" && key === "shares") continue;
+    if (type === "sell" && key === "amount") continue;
+
     const input = document.createElement("input");
     input.type = "text";
-    input.name = field.key;
-    input.value = field.value;
-    if (field.placeholder) {
-      input.placeholder = field.placeholder;
+    input.name = key;
+    input.value = key === "symbol" ? symbol : key === "date" ? today() : "";
+    if (key === "date") {
+      input.placeholder = today();
+    } else if (key === "price" && latestPurchase) {
+      input.placeholder = String(latestPurchase.price);
+    } else if (key === "shares" && latestPurchase) {
+      input.placeholder = String(latestPurchase.shares);
     }
-    input.dataset.field = field.key;
-    input.setAttribute("aria-label", field.key);
+    input.dataset.field = key;
+    input.setAttribute("aria-label", key);
     cell.append(input);
     row.append(cell);
   }
-
-  const sharesCell = document.createElement("td");
-  sharesCell.dataset.field = "shares";
-  sharesCell.dataset.computed = "true";
-  sharesCell.textContent = "0";
-  row.insertBefore(sharesCell, row.children[2]);
 
   const actionCell = document.createElement("td");
   const saveButton = document.createElement("button");
@@ -313,16 +322,15 @@ function buildNewPurchaseRow() {
   actionCell.append(saveButton);
   row.append(actionCell);
 
-  updateComputedShares(row);
-  row.querySelector('input[data-field="price"]').addEventListener("input", () => updateComputedShares(row));
-  row.querySelector('input[data-field="amount"]').addEventListener("input", () => updateComputedShares(row));
+  row.addEventListener("input", () => updateDraftCalculations(row));
+  updateDraftCalculations(row);
   return row;
 }
 
-function captureNewPurchase(row) {
+function captureNewTransaction(row) {
   const inputs = row.querySelectorAll("input");
   const candidate = {};
-  candidate.type = "buy";
+  candidate.type = row.dataset.type;
   for (const input of inputs) {
     const value = input.value.trim();
     candidate[input.dataset.field] = value;
@@ -332,15 +340,32 @@ function captureNewPurchase(row) {
   if (normalized.symbol === undefined || normalized.symbol === "") {
     throw new Error("The stock symbol is required.");
   }
+  if (!/^[A-Z0-9.^-]{1,15}$/.test(normalized.symbol)) {
+    throw new Error("Stock symbol is invalid.");
+  }
   if (normalized.price === undefined || !Number.isFinite(normalized.price) || normalized.price <= 0) {
     throw new Error("Price must be a positive number.");
   }
-  if (normalized.amount === undefined || !Number.isFinite(normalized.amount) || normalized.amount <= 0) {
-    throw new Error("Amount must be a positive number.");
-  }
-  normalized.shares = Math.floor(normalized.amount / normalized.price);
-  if (!Number.isInteger(normalized.shares) || normalized.shares <= 0) {
-    throw new Error("The investment amount is not enough to buy one share.");
+  if (normalized.type === "buy") {
+    if (normalized.amount === undefined || !Number.isFinite(normalized.amount) || normalized.amount <= 0) {
+      throw new Error("Amount must be a positive number.");
+    }
+    normalized.shares = Math.floor(normalized.amount / normalized.price);
+    if (!Number.isInteger(normalized.shares) || normalized.shares <= 0) {
+      throw new Error("The investment amount is not enough to buy one share.");
+    }
+  } else {
+    if (normalized.shares === undefined || !Number.isFinite(normalized.shares) || normalized.shares <= 0) {
+      throw new Error("Shares must be a positive number.");
+    }
+    const position = calculatePositions().find((item) => item.symbol === normalized.symbol);
+    if (!position || normalized.shares > position.shares) {
+      throw new Error(`Enter a number of shares no more than the ${normalized.symbol} position (${position?.shares ?? 0}).`);
+    }
+    normalized.amount = normalized.shares * normalized.price;
+    if (!Number.isFinite(normalized.amount) || normalized.amount <= 0) {
+      throw new Error("The sale proceeds are too large to record.");
+    }
   }
   if (!parseDate(normalized.date)) {
     throw new Error("Date must be in MM-DD-YYYY format.");
@@ -349,10 +374,10 @@ function captureNewPurchase(row) {
   return normalized;
 }
 
-function saveNewPurchase(row) {
+function saveNewTransaction(row) {
   try {
-    const purchase = captureNewPurchase(row);
-    const nextTransactions = [...transactions, purchase];
+    const transaction = captureNewTransaction(row);
+    const nextTransactions = [...transactions, transaction];
     validateTransactions(nextTransactions);
     persistTransactions(nextTransactions);
     setStatus("");
@@ -389,6 +414,21 @@ function cloneWithFieldValue(index, field, value) {
       next.date = String(value).trim();
     } else if (field === "shares") {
       next.shares = Number(String(value).trim());
+      if (Number.isFinite(next.shares) && next.price > 0) {
+        next.amount = next.shares * next.price;
+      }
+    } else if (field === "amount") {
+      const numeric = parseNumericField(value);
+      if (numeric === undefined) {
+        delete next.amount;
+      } else {
+        next.amount = numeric;
+        if (Number.isFinite(numeric) && next.price > 0) {
+          next.shares = next.type === "buy"
+            ? Math.floor(numeric / next.price)
+            : numeric / next.price;
+        }
+      }
     } else {
       const numeric = parseNumericField(value);
       if (numeric === undefined) {
@@ -430,7 +470,7 @@ function deleteTransaction(index) {
 function startEditingCell(cell) {
   const index = Number(cell.dataset.index);
   const field = cell.dataset.field;
-  if (!Number.isInteger(index) || !field || field === "shares") return;
+  if (!Number.isInteger(index) || !field) return;
 
   const transaction = transactions[index];
   if (!transaction) return;
@@ -443,7 +483,10 @@ function startEditingCell(cell) {
   input.dataset.field = field;
   input.setAttribute("aria-label", `Edit ${field}`);
 
+  let finished = false;
   const save = () => {
+    if (finished) return;
+    finished = true;
     const nextValue = input.value;
     if (field === "type") {
       const normalized = String(nextValue).trim().toLowerCase();
@@ -464,9 +507,11 @@ function startEditingCell(cell) {
     }
 
     if (field === "shares") {
-      const numeric = Number(String(nextValue).trim());
-      if (!Number.isFinite(numeric) || !Number.isInteger(numeric) || numeric <= 0) {
-        setStatus("Shares must be a positive whole number.");
+      const numeric = parseNumericField(nextValue);
+      if (!Number.isFinite(numeric) || numeric <= 0 || (transaction.type === "buy" && !Number.isInteger(numeric))) {
+        setStatus(transaction.type === "buy"
+          ? "Shares must be a positive whole number."
+          : "Shares must be a positive number.");
         renderTransactions();
         return;
       }
@@ -474,15 +519,26 @@ function startEditingCell(cell) {
 
     if (["price", "amount"].includes(field)) {
       const numeric = parseNumericField(nextValue);
-      if (nextValue === "" && field !== "amount") {
+      if (nextValue === "" && field === "price") {
         updateTransactionField(index, field, "");
         return;
       }
       if (!Number.isFinite(numeric) || numeric <= 0) {
-        setStatus("Price and amount must be positive numbers.");
+        setStatus(`${field === "price" ? "Price" : "Amount"} must be a positive number.`);
         renderTransactions();
         return;
       }
+      if (field === "amount" && !(transaction.price > 0)) {
+        setStatus("A recorded price is required to calculate shares from the amount.");
+        renderTransactions();
+        return;
+      }
+    }
+
+    if (field === "shares" && !(transaction.price > 0)) {
+      setStatus("A recorded price is required to calculate the amount from shares.");
+      renderTransactions();
+      return;
     }
 
     if (field === "date") {
@@ -499,6 +555,7 @@ function startEditingCell(cell) {
   input.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
       event.preventDefault();
+      finished = true;
       renderTransactions();
     }
   });
@@ -519,7 +576,7 @@ function renderTransactions() {
 
   const rows = transactions.map((transaction, index) => {
     const row = document.createElement("tr");
-    const fields = ["type", "symbol", "shares", "price", "amount", "date"];
+    const fields = ["type", "symbol", "price", "shares", "amount", "date"];
 
     for (const field of fields) {
       const cell = document.createElement("td");
@@ -527,10 +584,8 @@ function renderTransactions() {
       cell.dataset.field = field;
       cell.textContent =
         transaction[field] === undefined ? "Not recorded" : String(transaction[field]);
-      if (field !== "shares") {
-        cell.className = "transaction-cell";
-        cell.title = "Double-click to edit";
-      }
+      cell.className = "transaction-cell";
+      cell.title = "Double-click to edit";
       row.append(cell);
     }
 
@@ -553,16 +608,26 @@ function renderTransactions() {
     transactionsBody.append(row);
   }
 
-  const addRow = buildNewPurchaseRow();
+  const addRow = buildNewTransactionRow();
   transactionsBody.append(addRow);
 }
+
+positionsBody.addEventListener("click", (event) => {
+  const button = event.target.closest("button[data-symbol]");
+  if (!button) return;
+  const row = buildNewTransactionRow("sell", button.dataset.symbol);
+  transactionsBody.querySelector(".new-transaction-row")?.remove();
+  transactionsBody.append(row);
+  row.querySelector('input[data-field="price"]').focus();
+  setStatus("");
+});
 
 transactionsBody.addEventListener("click", (event) => {
   const saveButton = event.target.closest(".save-button");
   if (saveButton) {
     const row = saveButton.closest("tr");
     if (row) {
-      saveNewPurchase(row);
+      saveNewTransaction(row);
     }
     return;
   }

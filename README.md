@@ -1,4 +1,10 @@
 
+# m1f
+# m1e
+- When sell button is clicked, just prefill the bottom transaction row with sell, prefilled symbol, editable shares, price, make amount not editable
+  - also, let's switch shares and price column
+- Let's revert previous change to make shares of existing transactions not editable (rather if a user edit shares, then just modify the amount accordingly and vice versa)
+
 # m1d
 - Instead of "Enter ..." button, let just add a row to the bottom of the transactions table with type buy, and action being "Save"
 
