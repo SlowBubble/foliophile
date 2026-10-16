@@ -355,19 +355,19 @@ buyForm.addEventListener("submit", (event) => {
     return;
   }
 
-  const amountInput = window.prompt("Enter the amount you want to invest:");
-  if (amountInput === null) return;
-  const amount = Number(amountInput);
-  if (!Number.isFinite(amount) || amount <= 0) {
-    status.textContent = "The investment amount must be greater than zero.";
-    return;
-  }
-
   const priceInput = window.prompt("Enter the stock price:");
   if (priceInput === null) return;
   const price = Number(priceInput);
   if (!Number.isFinite(price) || price <= 0) {
     status.textContent = "The stock price must be greater than zero.";
+    return;
+  }
+
+  const amountInput = window.prompt("Enter the amount you want to invest:");
+  if (amountInput === null) return;
+  const amount = Number(amountInput);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    status.textContent = "The investment amount must be greater than zero.";
     return;
   }
 
@@ -396,6 +396,14 @@ positionsBody.addEventListener("click", (event) => {
   const position = calculatePositions().find((item) => item.symbol === symbol);
   if (!position) return;
 
+  const priceInput = window.prompt(`Enter the sale price per ${symbol} share:`);
+  if (priceInput === null) return;
+  const price = Number(priceInput);
+  if (!Number.isFinite(price) || price <= 0) {
+    status.textContent = "The stock price must be greater than zero.";
+    return;
+  }
+
   const sharesInput = window.prompt(
     `How many ${symbol} shares do you want to sell? (You own ${position.shares})`,
   );
@@ -410,13 +418,6 @@ positionsBody.addEventListener("click", (event) => {
     return;
   }
 
-  const priceInput = window.prompt(`Enter the sale price per ${symbol} share:`);
-  if (priceInput === null) return;
-  const price = Number(priceInput);
-  if (!Number.isFinite(price) || price <= 0) {
-    status.textContent = "The stock price must be greater than zero.";
-    return;
-  }
   const amount = shares * price;
   if (!Number.isFinite(amount)) {
     status.textContent = "The sale proceeds are too large to record.";

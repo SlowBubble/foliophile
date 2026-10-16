@@ -1,4 +1,9 @@
 
+# m1c
+- let's ask for price before number shares for both buy and sell
+
+For a purchase, enter the stock symbol, then the stock price, then the investment amount. For a sale, enter the sale price before the number of shares to sell.
+
 # m1b
 Have a button that when clicked:
 - Display a transaction table of all the transactions
@@ -13,14 +18,14 @@ I want an html app with a separate js file
 
 - When a user press enter, or have a button for to enter a transaction
     - Prompt for stock symbol (use window.prompt)
-    - Prompt amount you want to buy
     - Prompt stock price
+    - Prompt amount you want to buy
     - Prompt for the date (in MM-DD-YYYY and placeholder with today)
     - Round down to the number of shares you buy
     - Save the data in local storage and display the data as a row in the Positions table
 - For each row of the Positions table, have a button to press for selling part of the shares
-    - Prompt the number of shares you want to sell
     - Prompt for the stock price
+    - Prompt the number of shares you want to sell
     - Prompt for the date (in MM-DD-YYYY and placeholder with today)
     - Save the data in local storage
     - Update the Positions
