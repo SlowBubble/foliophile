@@ -1,4 +1,9 @@
 
+# m1h
+- Start with $100,000 in cash and show the current cash balance below the Positions header.
+- Display each realized gain as a percentage of net worth at that stock's first buy. Calculate net worth as cash plus the cost basis of open positions, assuming held positions have not changed in value.
+- And in addition to displaying the cash let's also display the net worth assuming we don't have to mark to market
+
 # m1g
 - Add another table before the Positions table, which shows the realized gains for each stock, counting only shares that had been bought and sold
   - Show the duration held (using last sold) in years

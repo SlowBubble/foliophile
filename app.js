@@ -1,10 +1,13 @@
 "use strict";
 
 const STORAGE_KEY = "foliophilia.transactions";
+const INITIAL_CASH = 100000;
 const realizedGainsBody = document.querySelector("#realized-gains");
 const positionsBody = document.querySelector("#positions");
 const transactionsBody = document.querySelector("#transactions");
 const status = document.querySelector("#status");
+const cashBalance = document.querySelector("#cash-balance");
+const netWorth = document.querySelector("#net-worth");
 
 function today() {
   const date = new Date();
@@ -103,6 +106,7 @@ function persistTransactions(nextTransactions) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(nextTransactions));
   transactions = nextTransactions;
   renderRealizedGains();
+  renderAccountBalances();
   renderPositions();
   renderTransactions();
 }
@@ -157,7 +161,67 @@ function dateTimestamp(value) {
   return Date.UTC(Number(year), Number(month) - 1, Number(day));
 }
 
-function calculateRealizedGains() {
+function calculateAccountSummary() {
+  let cash = INITIAL_CASH;
+  let totalCostBasis = 0;
+  const costBasisBySymbol = new Map();
+  const sharesBySymbol = new Map();
+  const firstBuyNetWorthBySymbol = new Map();
+
+  for (const transaction of transactions) {
+    const costBasis = costBasisBySymbol.get(transaction.symbol) ?? 0;
+    const shares = sharesBySymbol.get(transaction.symbol) ?? 0;
+    if (transaction.type === "buy") {
+      if (!firstBuyNetWorthBySymbol.has(transaction.symbol)) {
+        firstBuyNetWorthBySymbol.set(
+          transaction.symbol,
+          cash === null ? null : cash + totalCostBasis,
+        );
+      }
+
+      const purchaseCost = transaction.shares * transaction.price;
+      cash = cash === null ? null : cash - purchaseCost;
+      totalCostBasis += purchaseCost;
+      costBasisBySymbol.set(transaction.symbol, costBasis + purchaseCost);
+      sharesBySymbol.set(transaction.symbol, shares + transaction.shares);
+      continue;
+    }
+
+    const remainingShares = shares - transaction.shares;
+    const soldCostBasis =
+      remainingShares <= 1e-8
+        ? costBasis
+        : (costBasis / shares) * transaction.shares;
+    totalCostBasis -= soldCostBasis;
+    costBasisBySymbol.set(
+      transaction.symbol,
+      remainingShares <= 1e-8 ? 0 : costBasis - soldCostBasis,
+    );
+    sharesBySymbol.set(
+      transaction.symbol,
+      remainingShares <= 1e-8 ? 0 : remainingShares,
+    );
+
+    const saleProceeds =
+      transaction.amount ?? transaction.price * transaction.shares;
+    if (cash !== null) {
+      cash =
+        Number.isFinite(saleProceeds) && saleProceeds > 0
+          ? cash + saleProceeds
+          : null;
+    }
+  }
+
+  return {
+    cashBalance: cash,
+    netWorth: cash === null ? null : cash + totalCostBasis,
+    firstBuyNetWorthBySymbol,
+  };
+}
+
+function calculateRealizedGains(
+  accountSummary = calculateAccountSummary(),
+) {
   const results = new Map();
 
   for (const transaction of transactions) {
@@ -235,6 +299,12 @@ function calculateRealizedGains() {
         gain: result.hasUnrecordedProceeds ? null : gain,
         gainRate: result.hasUnrecordedProceeds ? null : gainRate,
         irr,
+        netWorthRate:
+          result.hasUnrecordedProceeds ||
+          accountSummary.firstBuyNetWorthBySymbol.get(result.symbol) == null
+            ? null
+            : gain /
+              accountSummary.firstBuyNetWorthBySymbol.get(result.symbol),
       };
     })
     .sort((left, right) => left.symbol.localeCompare(right.symbol));
@@ -257,13 +327,13 @@ function formatPercentage(value) {
 function renderRealizedGains() {
   if (!realizedGainsBody) return;
 
-  const gains = calculateRealizedGains();
+  const gains = calculateRealizedGains(calculateAccountSummary());
   realizedGainsBody.replaceChildren();
 
   if (gains.length === 0) {
     const row = document.createElement("tr");
     const cell = document.createElement("td");
-    cell.colSpan = 5;
+    cell.colSpan = 6;
     cell.className = "empty-state";
     cell.textContent = "No realized gains yet.";
     row.append(cell);
@@ -283,6 +353,9 @@ function renderRealizedGains() {
       gain.gain === null ? "Not recorded" : formatCurrency(gain.gain),
       gain.gainRate === null ? "Not recorded" : formatPercentage(gain.gainRate),
       gain.irr === null ? "Not recorded" : formatPercentage(gain.irr),
+      gain.netWorthRate === null
+        ? "Not recorded"
+        : formatPercentage(gain.netWorthRate),
     ];
 
     for (const value of values) {
@@ -291,6 +364,23 @@ function renderRealizedGains() {
       row.append(cell);
     }
     realizedGainsBody.append(row);
+  }
+}
+
+function renderAccountBalances() {
+  const accountSummary = calculateAccountSummary();
+
+  if (cashBalance) {
+    cashBalance.textContent =
+      accountSummary.cashBalance === null
+        ? "Cash balance: Not recorded"
+        : `Cash balance: ${formatCurrency(accountSummary.cashBalance)}`;
+  }
+  if (netWorth) {
+    netWorth.textContent =
+      accountSummary.netWorth === null
+        ? "Net worth (positions at cost): Not recorded"
+        : `Net worth (positions at cost): ${formatCurrency(accountSummary.netWorth)}`;
   }
 }
 
@@ -802,5 +892,6 @@ transactionsBody.addEventListener("dblclick", (event) => {
 });
 
 renderRealizedGains();
+renderAccountBalances();
 renderPositions();
 renderTransactions();
