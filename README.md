@@ -1,5 +1,6 @@
 
 # m1f
+- Double-click the **sell** type cell in the draft row to cancel sale mode and return to a purchase.
 # m1e
 - When sell button is clicked, just prefill the bottom transaction row with sell, prefilled symbol, editable shares, price, make amount not editable
   - also, let's switch shares and price column

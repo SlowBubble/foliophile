@@ -282,6 +282,10 @@ function buildNewTransactionRow(type = "buy", symbol = "") {
     cell.dataset.field = key;
     if (key === "type") {
       cell.textContent = type;
+      if (type === "sell") {
+        cell.title = "Double-click to switch back to a purchase";
+        cell.className = "transaction-type-toggle";
+      }
       row.append(cell);
       continue;
     }
@@ -642,6 +646,18 @@ transactionsBody.addEventListener("click", (event) => {
 });
 
 transactionsBody.addEventListener("dblclick", (event) => {
+  const sellTypeCell = event.target.closest(
+    '.new-transaction-row[data-type="sell"] [data-field="type"]',
+  );
+  if (sellTypeCell) {
+    const row = sellTypeCell.closest(".new-transaction-row");
+    if (row) {
+      row.replaceWith(buildNewTransactionRow());
+      setStatus("");
+    }
+    return;
+  }
+
   const cell = event.target.closest(".transaction-cell");
   if (cell) {
     startEditingCell(cell);
